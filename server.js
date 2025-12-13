@@ -41,8 +41,9 @@ const presets = {
 };
 
 function convertYouTubeUrl(url) {
-  // Extract video ID from various YouTube URL formats
-  let videoId = null;
+  // Don't convert to nocookie - it causes 403 errors
+  // Just return the original URL
+  return url;
   
   // Standard watch URL: youtube.com/watch?v=VIDEO_ID
   const watchMatch = url.match(/[?&]v=([^&]+)/);
@@ -121,7 +122,7 @@ app.post('/api/download', async (req, res) => {
   const outputFile = path.join(OUTPUT_DIR, `${jobId}.mp4`);
   const tempFile = path.join(TEMP_DIR, `${jobId}_raw.mp4`);
   try {
-    const downloadCmd = `yt-dlp --no-check-certificates --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -f "bestvideo[height<=${config.resolution}][ext=mp4]+bestaudio[ext=m4a]/best" --merge-output-format mp4 -o "${tempFile}" "${processedUrl}"`;
+    const downloadCmd = `yt-dlp --extractor-args "youtube:player_client=android" --user-agent "com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip" -f "bestvideo[height<=${config.resolution}][ext=mp4]+bestaudio[ext=m4a]/best" --merge-output-format mp4 -o "${tempFile}" "${processedUrl}"`;
     await execCommand(downloadCmd);
     const stats = await fs.stat(tempFile);
     const fileSizeMB = stats.size / (1024 * 1024);
