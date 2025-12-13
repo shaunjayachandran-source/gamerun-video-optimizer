@@ -1,0 +1,9 @@
+node_modules/
+temp/
+output/
+*.mp4
+*.mov
+*.avi
+*.mkv
+.DS_Store
+.env
