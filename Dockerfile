@@ -1,14 +1,15 @@
 FROM node:18-slim
 
-# Install system dependencies
+# Install system dependencies including nodejs for yt-dlp
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
     python3-pip \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp
-RUN pip3 install --break-system-packages yt-dlp
+# Install yt-dlp with updated version
+RUN pip3 install --break-system-packages -U yt-dlp
 
 # Set working directory
 WORKDIR /app
@@ -30,6 +31,9 @@ EXPOSE 8080
 
 # Set environment variable for port
 ENV PORT=8080
+
+# Set Node.js as the JavaScript runtime for yt-dlp
+ENV YT_DLP_JS_RUNTIME=node
 
 # Start the application
 CMD ["npm", "start"]

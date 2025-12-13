@@ -121,7 +121,7 @@ app.post('/api/download', async (req, res) => {
   const outputFile = path.join(OUTPUT_DIR, `${jobId}.mp4`);
   const tempFile = path.join(TEMP_DIR, `${jobId}_raw.mp4`);
   try {
-    const downloadCmd = `yt-dlp -f "bestvideo[height<=${config.resolution}][ext=mp4]+bestaudio[ext=m4a]/best" --merge-output-format mp4 -o "${tempFile}" "${processedUrl}"`;
+    const downloadCmd = `yt-dlp --no-check-certificates --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" -f "bestvideo[height<=${config.resolution}][ext=mp4]+bestaudio[ext=m4a]/best" --merge-output-format mp4 -o "${tempFile}" "${processedUrl}"`;
     await execCommand(downloadCmd);
     const stats = await fs.stat(tempFile);
     const fileSizeMB = stats.size / (1024 * 1024);
