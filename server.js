@@ -40,35 +40,11 @@ const presets = {
   minimal: { resolution: '720', fps: '24', crf: '32', preset: 'veryfast', maxSize: '500M' }
 };
 
+// Job storage for async compression
+const jobs = new Map();
+
 function convertYouTubeUrl(url) {
-  // Don't convert to nocookie - it causes 403 errors
-  // Just return the original URL
-  return url;
-  
-  // Standard watch URL: youtube.com/watch?v=VIDEO_ID
-  const watchMatch = url.match(/[?&]v=([^&]+)/);
-  if (watchMatch) {
-    videoId = watchMatch[1];
-  }
-  
-  // Short URL: youtu.be/VIDEO_ID
-  const shortMatch = url.match(/youtu\.be\/([^?&]+)/);
-  if (shortMatch) {
-    videoId = shortMatch[1];
-  }
-  
-  // Embed URL: youtube.com/embed/VIDEO_ID
-  const embedMatch = url.match(/youtube\.com\/embed\/([^?&]+)/);
-  if (embedMatch) {
-    videoId = embedMatch[1];
-  }
-  
-  // If we found a video ID, convert to nocookie embed format
-  if (videoId) {
-    return `https://www.youtube-nocookie.com/embed/${videoId}?playlist=${videoId}&autoplay=1&iv_load_policy=3&loop=1&start=`;
-  }
-  
-  // If no YouTube pattern matched, return original URL
+  // Just return the original URL (don't convert to nocookie)
   return url;
 }
 
@@ -144,30 +120,98 @@ app.post('/api/download', async (req, res) => {
   }
 });
 
+// Compress uploaded file endpoint - Returns job ID immediately
 app.post('/api/compress', upload.single('video'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
+
   const { preset = 'balanced' } = req.body;
   const jobId = uuidv4();
-  const config = presets[preset];
-  const inputFile = req.file.path;
+  
+  // Store job info
+  jobs.set(jobId, {
+    status: 'processing',
+    progress: 0,
+    inputFile: req.file.path,
+    preset: preset
+  });
+
+  // Return job ID immediately
+  res.json({ 
+    success: true, 
+    jobId,
+    statusUrl: `/api/status/${jobId}`,
+    message: 'Processing started'
+  });
+
+  // Process in background (don't await - this runs async)
+  processCompressionJob(jobId, req.file.path, preset);
+});
+
+// Background compression processor
+async function processCompressionJob(jobId, inputFile, presetName) {
+  const config = presets[presetName];
   const outputFile = path.join(OUTPUT_DIR, `${jobId}.mp4`);
+
   try {
+    // Update status to compressing
+    jobs.set(jobId, { ...jobs.get(jobId), status: 'compressing', progress: 25 });
+
+    // Build ffmpeg command
     const compressCmd = `ffmpeg -i "${inputFile}" -vcodec libx264 -crf ${config.crf} -preset ${config.preset} -vf scale=-2:${config.resolution} -r ${config.fps} -fs ${config.maxSize} -movflags +faststart -y "${outputFile}"`;
+    
+    // Run compression (this takes time)
     await execCommand(compressCmd);
+
+    // Get file sizes for stats
     const inputStats = await fs.stat(inputFile);
     const outputStats = await fs.stat(outputFile);
     const reduction = Math.round((1 - outputStats.size / inputStats.size) * 100);
+
+    // Cleanup input file
     await fs.unlink(inputFile);
-    res.json({ success: true, jobId, downloadUrl: `/api/download/${jobId}`, stats: { originalSize: Math.round(inputStats.size / (1024 * 1024)), compressedSize: Math.round(outputStats.size / (1024 * 1024)), reduction: reduction } });
+
+    // Mark job as complete
+    jobs.set(jobId, {
+      status: 'complete',
+      progress: 100,
+      downloadUrl: `/api/download/${jobId}`,
+      stats: {
+        originalSize: Math.round(inputStats.size / (1024 * 1024)),
+        compressedSize: Math.round(outputStats.size / (1024 * 1024)),
+        reduction: reduction
+      }
+    });
+
   } catch (err) {
     console.error('Compression error:', err);
+    
+    // Cleanup input file on error
     try {
       await fs.unlink(inputFile);
     } catch {}
-    res.status(500).json({ error: 'Failed to compress video', details: err.stderr || err.message });
+    
+    // Mark job as failed
+    jobs.set(jobId, {
+      status: 'error',
+      progress: 0,
+      error: 'Failed to compress video',
+      details: err.stderr || err.message
+    });
   }
+}
+
+// Job status endpoint - Frontend polls this
+app.get('/api/status/:jobId', (req, res) => {
+  const { jobId } = req.params;
+  const job = jobs.get(jobId);
+  
+  if (!job) {
+    return res.status(404).json({ error: 'Job not found' });
+  }
+  
+  res.json(job);
 });
 
 app.get('/api/download/:jobId', async (req, res) => {
