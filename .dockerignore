@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+temp
+output
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+.DS_Store

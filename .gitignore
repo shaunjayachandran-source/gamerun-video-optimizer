@@ -2,8 +2,10 @@ node_modules/
 temp/
 output/
 *.mp4
-*.mov
 *.avi
+*.mov
 *.mkv
-.DS_Store
+*.webm
 .env
+.DS_Store
+npm-debug.log

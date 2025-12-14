@@ -1,3 +1,12 @@
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    // Don't exit - keep server running
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Don't exit - keep server running
+});
 const express = require('express');
 const cors = require('cors');
 const { exec } = require('child_process');
@@ -7,7 +16,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -76,7 +85,9 @@ async function cleanupOldFiles() {
     console.error('Cleanup error:', err);
   }
 }
-
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+});
 app.get('/api/health', async (req, res) => {
   try {
     await execCommand('yt-dlp --version');
