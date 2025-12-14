@@ -277,20 +277,32 @@
         });
 
         function handleFile(file) {
-            if (!file.type.startsWith('video/')) {
-                alert('Please select a video file');
-                return;
-            }
+    // More permissive file type check
+    const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
+    const isVideo = file.type.startsWith('video/') || validTypes.includes(file.type) || 
+                    file.name.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv)$/i);
+    
+    if (!isVideo) {
+        alert('Please select a valid video file (MP4, MOV, AVI, MKV, etc.)');
+        return;
+    }
 
-            selectedFile = file;
-            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    // Check file size (5GB = 5 * 1024 * 1024 * 1024 bytes)
+    const maxSize = 5 * 1024 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert(`File too large! Maximum size is 5GB. Your file is ${(file.size / (1024**3)).toFixed(2)}GB`);
+        return;
+    }
 
-            document.getElementById('dropZoneContent').classList.add('hidden');
-            document.getElementById('fileInfo').classList.remove('hidden');
-            document.getElementById('fileName').textContent = file.name;
-            document.getElementById('fileSize').textContent = `${sizeMB} MB`;
-            compressBtn.disabled = false;
-        }
+    selectedFile = file;
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+
+    document.getElementById('dropZoneContent').classList.add('hidden');
+    document.getElementById('fileInfo').classList.remove('hidden');
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = `${sizeMB} MB`;
+    compressBtn.disabled = false;
+}
 
         // Compress file
         // Compress file with async job processing
