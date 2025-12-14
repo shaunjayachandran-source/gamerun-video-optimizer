@@ -1,10 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GameRun.ai Video Optimizer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Performance optimizations -->
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    
+    <!-- Use prebuilt Tailwind instead of CDN -->
+    <link href="https://unpkg.com/tailwindcss@3.4.1/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
     <div class="container mx-auto px-4 py-8 max-w-6xl">
@@ -181,9 +187,16 @@
 
     <script>
         // IMPORTANT: Change this to your Railway URL when deployed
-        const API_URL = window.location.origin;
-        // Example when deployed: const API_URL = 'https://your-app.up.railway.app';
+const API_URL = window.location.origin;
 
+// Test if API is reachable
+fetch(`${API_URL}/health`)
+  .then(r => r.json())
+  .then(data => console.log('API Status:', data))
+  .catch(err => {
+    console.error('API not reachable at:', API_URL);
+    alert('Server connection failed. Please refresh the page.');
+  });
         let selectedFile = null;
 
         // Download from URL
