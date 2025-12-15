@@ -11,11 +11,11 @@
         <!-- Header -->
         <div class="bg-white rounded-lg shadow-xl p-8 mb-8">
             <div class="text-center">
-               <h1 class="text-4xl font-bold text-gray-900 mb-2">
-    🏀⚾ GameRun Video Optimizer ⚽🏒
-</h1>
+                <h1 class="text-4xl font-bold text-gray-900 mb-2">
+                    🏀⚾ GameRun Video Optimizer ⚽🏒
+                </h1>
                 <p class="text-gray-600">
-                    Zero-effort Video Optimization AI Analysis Processing
+                    Zero-effort Video Optimization for AI Analysis Processing
                 </p>
             </div>
         </div>
@@ -183,24 +183,15 @@
         const API_URL = window.location.origin;
         let selectedFile = null;
 
-        // Prevent default drag behaviors on entire document
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            document.body.addEventListener(eventName, preventDefaults, false);
-            document.addEventListener(eventName, preventDefaults, false);
-        });
-
+        // Prevent default drag behaviors
         function preventDefaults(e) {
             e.preventDefault();
             e.stopPropagation();
         }
 
-        // Test API connection
-        fetch(`${API_URL}/health`)
-            .then(r => r.json())
-            .then(data => console.log('API Status:', data))
-            .catch(err => {
-                console.error('API not reachable:', err);
-            });
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
 
         // Download from URL
         document.getElementById('downloadBtn').addEventListener('click', async () => {
@@ -260,7 +251,7 @@
             }
         });
 
-        // Drag & Drop functionality
+        // Drag & Drop setup
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const compressBtn = document.getElementById('compressBtn');
@@ -301,33 +292,22 @@
                 handleFile(e.target.files[0]);
             }
         });
-function handleFile(file) {
-    // More permissive file type check
-    const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
-    const isVideo = file.type.startsWith('video/') || validTypes.includes(file.type) || 
-                    file.name.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv)$/i);
-    
-    if (!isVideo) {
-        alert('Please select a valid video file (MP4, MOV, AVI, MKV, etc.)');
-        return;
-    }  // ← ADD THIS CLOSING BRACE
 
-    // Check file size (5GB = 5 * 1024 * 1024 * 1024 bytes)
-    const maxSize = 5 * 1024 * 1024 * 1024;
-    if (file.size > maxSize) {
-        alert(`File too large! Maximum size is 5GB. Your file is ${(file.size / (1024**3)).toFixed(2)}GB`);
-        return;
-    }
+        function handleFile(file) {
+            const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
+            const isVideo = file.type.startsWith('video/') || validTypes.includes(file.type) || 
+                            file.name.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv)$/i);
+            
+            if (!isVideo) {
+                alert('Please select a valid video file (MP4, MOV, AVI, MKV, etc.)');
+                return;
+            }
 
-    selectedFile = file;
-    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-
-    document.getElementById('dropZoneContent').classList.add('hidden');
-    document.getElementById('fileInfo').classList.remove('hidden');
-    document.getElementById('fileName').textContent = file.name;
-    document.getElementById('fileSize').textContent = `${sizeMB} MB`;
-    compressBtn.disabled = false;
-}
+            const maxSize = 5 * 1024 * 1024 * 1024;
+            if (file.size > maxSize) {
+                alert(`File too large! Maximum size is 5GB. Your file is ${(file.size / (1024**3)).toFixed(2)}GB`);
+                return;
+            }
 
             selectedFile = file;
             const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
@@ -337,9 +317,9 @@ function handleFile(file) {
             document.getElementById('fileName').textContent = file.name;
             document.getElementById('fileSize').textContent = `${sizeMB} MB`;
             compressBtn.disabled = false;
-        
+        }
 
-        // Compress file with async job processing
+        // Compress functionality
         document.getElementById('compressBtn').addEventListener('click', async () => {
             if (!selectedFile) {
                 alert('Please select a file first');
@@ -360,7 +340,6 @@ function handleFile(file) {
                 formData.append('video', selectedFile);
                 formData.append('preset', preset);
 
-                // Step 1: Upload file
                 document.getElementById('compressStatus').textContent = 'Uploading...';
                 
                 const uploadResponse = await fetch(`${API_URL}/api/compress`, {
@@ -374,13 +353,12 @@ function handleFile(file) {
                     throw new Error(uploadData.error || 'Upload failed');
                 }
 
-                // Step 2: Poll for completion
                 document.getElementById('compressStatus').textContent = 'Upload complete! Processing...';
                 document.getElementById('uploadProgress').style.width = '100%';
 
                 const jobId = uploadData.jobId;
                 let attempts = 0;
-                const maxAttempts = 120; // 10 minutes max
+                const maxAttempts = 120;
 
                 const checkStatus = async () => {
                     attempts++;
@@ -389,10 +367,7 @@ function handleFile(file) {
                         const statusResponse = await fetch(`${API_URL}/api/status/${jobId}`);
                         const statusData = await statusResponse.json();
 
-                        console.log('Status check:', statusData);
-
                         if (statusData.status === 'complete') {
-                            // Success!
                             progress.classList.add('hidden');
                             result.classList.remove('hidden');
                             result.innerHTML = `
@@ -411,7 +386,6 @@ function handleFile(file) {
                                 </div>
                             `;
                             
-                            // Reset for next upload
                             selectedFile = null;
                             document.getElementById('dropZoneContent').classList.remove('hidden');
                             document.getElementById('fileInfo').classList.add('hidden');
@@ -425,7 +399,6 @@ function handleFile(file) {
                             throw new Error('Processing timeout - file may be too large');
                             
                         } else {
-                            // Still processing
                             const messages = [
                                 'Compressing large video file...',
                                 'This may take several minutes...',
@@ -433,7 +406,7 @@ function handleFile(file) {
                                 'Almost there...'
                             ];
                             document.getElementById('compressStatus').textContent = messages[Math.floor(attempts / 3) % messages.length];
-                            setTimeout(checkStatus, 5000); // Check again in 5 seconds
+                            setTimeout(checkStatus, 5000);
                         }
                         
                     } catch (err) {
@@ -441,7 +414,6 @@ function handleFile(file) {
                     }
                 };
 
-                // Start polling after 2 seconds
                 setTimeout(checkStatus, 2000);
 
             } catch (err) {
