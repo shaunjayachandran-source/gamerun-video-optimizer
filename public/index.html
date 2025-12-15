@@ -15,7 +15,7 @@
     🏀⚾ GameRun Video Optimizer ⚽🏒
 </h1>
                 <p class="text-gray-600">
-                    Zero-effort Cideo Optimization AI Analysis Processing
+                    Zero-effort Video Optimization AI Analysis Processing
                 </p>
             </div>
         </div>
@@ -46,10 +46,10 @@
                             Quality Preset
                         </label>
                         <select id="downloadPreset" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-    <option value="balanced" selected>Balanced - Recommended (1080p@30fps, ~1.4GB)</option>
-    <option value="efficient">Efficient (720p@30fps, ~800MB)</option>
-    <option value="minimal">Minimal (720p@24fps, ~500MB)</option>
-</select>
+                            <option value="balanced" selected>Balanced - Recommended (1080p@30fps, ~1.4GB)</option>
+                            <option value="efficient">Efficient (720p@30fps, ~800MB)</option>
+                            <option value="minimal">Minimal (720p@24fps, ~500MB)</option>
+                        </select>
                     </div>
 
                     <button
@@ -155,43 +155,52 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200">
-    <tr class="bg-indigo-50">
-        <td class="px-4 py-3 font-medium text-indigo-700">Balanced ⭐</td>
-        <td class="px-4 py-3">General game analysis (recommended)</td>
-        <td class="px-4 py-3">1080p @ 30fps</td>
-        <td class="px-4 py-3">~1.4GB</td>
-    </tr>
-    <tr>
-        <td class="px-4 py-3 font-medium text-blue-700">Efficient</td>
-        <td class="px-4 py-3">Quick analysis, multiple games</td>
-        <td class="px-4 py-3">720p @ 30fps</td>
-        <td class="px-4 py-3">~800MB</td>
-    </tr>
-    <tr>
-        <td class="px-4 py-3 font-medium text-green-700">Minimal</td>
-        <td class="px-4 py-3">Fast uploads, mobile viewing</td>
-        <td class="px-4 py-3">720p @ 24fps</td>
-        <td class="px-4 py-3">~500MB</td>
-    </tr>
-</tbody>
+                        <tr class="bg-indigo-50">
+                            <td class="px-4 py-3 font-medium text-indigo-700">Balanced ⭐</td>
+                            <td class="px-4 py-3">General game analysis (recommended)</td>
+                            <td class="px-4 py-3">1080p @ 30fps</td>
+                            <td class="px-4 py-3">~1.4GB</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-3 font-medium text-blue-700">Efficient</td>
+                            <td class="px-4 py-3">Quick analysis, multiple games</td>
+                            <td class="px-4 py-3">720p @ 30fps</td>
+                            <td class="px-4 py-3">~800MB</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-3 font-medium text-green-700">Minimal</td>
+                            <td class="px-4 py-3">Fast uploads, mobile viewing</td>
+                            <td class="px-4 py-3">720p @ 24fps</td>
+                            <td class="px-4 py-3">~500MB</td>
+                        </tr>
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
 
     <script>
-        // IMPORTANT: Change this to your Railway URL when deployed
-const API_URL = window.location.origin;
-
-// Test if API is reachable
-fetch(`${API_URL}/health`)
-  .then(r => r.json())
-  .then(data => console.log('API Status:', data))
-  .catch(err => {
-    console.error('API not reachable at:', API_URL);
-    alert('Server connection failed. Please refresh the page.');
-  });
+        const API_URL = window.location.origin;
         let selectedFile = null;
+
+        // Prevent default drag behaviors on entire document
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, preventDefaults, false);
+            document.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // Test API connection
+        fetch(`${API_URL}/health`)
+            .then(r => r.json())
+            .then(data => console.log('API Status:', data))
+            .catch(err => {
+                console.error('API not reachable:', err);
+            });
 
         // Download from URL
         document.getElementById('downloadBtn').addEventListener('click', async () => {
@@ -258,17 +267,27 @@ fetch(`${API_URL}/health`)
 
         dropZone.addEventListener('click', () => fileInput.click());
 
-        dropZone.addEventListener('dragover', (e) => {
+        dropZone.addEventListener('dragenter', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             dropZone.classList.add('border-purple-500', 'bg-purple-50');
         });
 
-        dropZone.addEventListener('dragleave', () => {
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('border-purple-500', 'bg-purple-50');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             dropZone.classList.remove('border-purple-500', 'bg-purple-50');
         });
 
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             dropZone.classList.remove('border-purple-500', 'bg-purple-50');
             
             const files = e.dataTransfer.files;
@@ -283,152 +302,150 @@ fetch(`${API_URL}/health`)
             }
         });
 
-  function handleFile(file) {
-    // More permissive file type check
-    const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
-    const isVideo = file.type.startsWith('video/') || validTypes.includes(file.type) || 
-                    file.name.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv)$/i);
-    
-    if (!isVideo) {
-        alert('Please select a valid video file (MP4, MOV, AVI, MKV, etc.)');
-        return;
-    }
+        function handleFile(file) {
+            // More permissive file type check
+            const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
+            const isVideo = file.type.startsWith('video/') || validTypes.includes(file.type) || 
+                            file.name.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv)$/i);
+            
+            if (!isVideo) {
+                alert('Please select a valid video file (MP4, MOV, AVI, MKV, etc.)');
+                return;
+            }
 
-    // Check file size (5GB = 5 * 1024 * 1024 * 1024 bytes)
-    const maxSize = 5 * 1024 * 1024 * 1024;
-    if (file.size > maxSize) {
-        alert(`File too large! Maximum size is 5GB. Your file is ${(file.size / (1024**3)).toFixed(2)}GB`);
-        return;
-    }
+            // Check file size (5GB = 5 * 1024 * 1024 * 1024 bytes)
+            const maxSize = 5 * 1024 * 1024 * 1024;
+            if (file.size > maxSize) {
+                alert(`File too large! Maximum size is 5GB. Your file is ${(file.size / (1024**3)).toFixed(2)}GB`);
+                return;
+            }
 
-    selectedFile = file;
-    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            selectedFile = file;
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
 
-    document.getElementById('dropZoneContent').classList.add('hidden');
-    document.getElementById('fileInfo').classList.remove('hidden');
-    document.getElementById('fileName').textContent = file.name;
-    document.getElementById('fileSize').textContent = `${sizeMB} MB`;
-    compressBtn.disabled = false;
-}
-}
-
-        // Compress file
-        // Compress file with async job processing
-document.getElementById('compressBtn').addEventListener('click', async () => {
-    if (!selectedFile) {
-        alert('Please select a file first');
-        return;
-    }
-
-    const preset = document.getElementById('compressPreset').value;
-    const btn = document.getElementById('compressBtn');
-    const progress = document.getElementById('compressProgress');
-    const result = document.getElementById('compressResult');
-
-    btn.disabled = true;
-    progress.classList.remove('hidden');
-    result.classList.add('hidden');
-
-    try {
-        const formData = new FormData();
-        formData.append('video', selectedFile);
-        formData.append('preset', preset);
-
-        // Step 1: Upload file
-        document.getElementById('compressStatus').textContent = 'Uploading...';
-        
-        const uploadResponse = await fetch(`${API_URL}/api/compress`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const uploadData = await uploadResponse.json();
-
-        if (!uploadData.success) {
-            throw new Error(uploadData.error || 'Upload failed');
+            document.getElementById('dropZoneContent').classList.add('hidden');
+            document.getElementById('fileInfo').classList.remove('hidden');
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = `${sizeMB} MB`;
+            compressBtn.disabled = false;
         }
 
-        // Step 2: Poll for completion
-        document.getElementById('compressStatus').textContent = 'Upload complete! Processing...';
-        document.getElementById('uploadProgress').style.width = '100%';
-
-        const jobId = uploadData.jobId;
-        let attempts = 0;
-        const maxAttempts = 120; // 10 minutes max
-
-        const checkStatus = async () => {
-            attempts++;
-            
-            try {
-                const statusResponse = await fetch(`${API_URL}/api/status/${jobId}`);
-                const statusData = await statusResponse.json();
-
-                console.log('Status check:', statusData); // DEBUG
-
-                if (statusData.status === 'complete') {
-                    // Success!
-                    progress.classList.add('hidden');
-                    result.classList.remove('hidden');
-                    result.innerHTML = `
-                        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                            <p class="text-green-800 font-semibold mb-2">✓ Video compressed successfully!</p>
-                            <div class="text-sm text-green-700 mb-3">
-                                <p>Original: ${statusData.stats?.originalSize || 'N/A'}MB</p>
-                                <p>Compressed: ${statusData.stats?.compressedSize || 'N/A'}MB</p>
-                                <p>Saved: ${statusData.stats?.reduction || 'N/A'}%</p>
-                            </div>
-                            <a href="${API_URL}${statusData.downloadUrl}" 
-                               class="inline-block w-full bg-green-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-green-700 transition-colors text-center"
-                               download>
-                                Download Compressed Video
-                            </a>
-                        </div>
-                    `;
-                    
-                    // Reset for next upload
-                    selectedFile = null;
-                    document.getElementById('dropZoneContent').classList.remove('hidden');
-                    document.getElementById('fileInfo').classList.add('hidden');
-                    fileInput.value = '';
-                    btn.disabled = false;
-                    
-                } else if (statusData.status === 'error') {
-                    throw new Error(statusData.error || 'Compression failed');
-                    
-                } else if (attempts >= maxAttempts) {
-                    throw new Error('Processing timeout - file may be too large');
-                    
-                } else {
-                    // Still processing
-                    const messages = [
-                        'Compressing large video file...',
-                        'This may take several minutes...',
-                        'Still working on it...',
-                        'Almost there...'
-                    ];
-                    document.getElementById('compressStatus').textContent = messages[Math.floor(attempts / 3) % messages.length];
-                    setTimeout(checkStatus, 5000); // Check again in 5 seconds
-                }
-                
-            } catch (err) {
-                throw err;
+        // Compress file with async job processing
+        document.getElementById('compressBtn').addEventListener('click', async () => {
+            if (!selectedFile) {
+                alert('Please select a file first');
+                return;
             }
-        };
 
-        // Start polling after 2 seconds
-        setTimeout(checkStatus, 2000);
+            const preset = document.getElementById('compressPreset').value;
+            const btn = document.getElementById('compressBtn');
+            const progress = document.getElementById('compressProgress');
+            const result = document.getElementById('compressResult');
 
-    } catch (err) {
-        progress.classList.add('hidden');
-        result.classList.remove('hidden');
-        result.innerHTML = `
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p class="text-red-800">❌ Error: ${err.message}</p>
-            </div>
-        `;
-        btn.disabled = false;
-    }
-});
- </script>
+            btn.disabled = true;
+            progress.classList.remove('hidden');
+            result.classList.add('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('video', selectedFile);
+                formData.append('preset', preset);
+
+                // Step 1: Upload file
+                document.getElementById('compressStatus').textContent = 'Uploading...';
+                
+                const uploadResponse = await fetch(`${API_URL}/api/compress`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const uploadData = await uploadResponse.json();
+
+                if (!uploadData.success) {
+                    throw new Error(uploadData.error || 'Upload failed');
+                }
+
+                // Step 2: Poll for completion
+                document.getElementById('compressStatus').textContent = 'Upload complete! Processing...';
+                document.getElementById('uploadProgress').style.width = '100%';
+
+                const jobId = uploadData.jobId;
+                let attempts = 0;
+                const maxAttempts = 120; // 10 minutes max
+
+                const checkStatus = async () => {
+                    attempts++;
+                    
+                    try {
+                        const statusResponse = await fetch(`${API_URL}/api/status/${jobId}`);
+                        const statusData = await statusResponse.json();
+
+                        console.log('Status check:', statusData);
+
+                        if (statusData.status === 'complete') {
+                            // Success!
+                            progress.classList.add('hidden');
+                            result.classList.remove('hidden');
+                            result.innerHTML = `
+                                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                    <p class="text-green-800 font-semibold mb-2">✓ Video compressed successfully!</p>
+                                    <div class="text-sm text-green-700 mb-3">
+                                        <p>Original: ${statusData.stats?.originalSize || 'N/A'}MB</p>
+                                        <p>Compressed: ${statusData.stats?.compressedSize || 'N/A'}MB</p>
+                                        <p>Saved: ${statusData.stats?.reduction || 'N/A'}%</p>
+                                    </div>
+                                    <a href="${API_URL}${statusData.downloadUrl}" 
+                                       class="inline-block w-full bg-green-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-green-700 transition-colors text-center"
+                                       download>
+                                        Download Compressed Video
+                                    </a>
+                                </div>
+                            `;
+                            
+                            // Reset for next upload
+                            selectedFile = null;
+                            document.getElementById('dropZoneContent').classList.remove('hidden');
+                            document.getElementById('fileInfo').classList.add('hidden');
+                            fileInput.value = '';
+                            btn.disabled = false;
+                            
+                        } else if (statusData.status === 'error') {
+                            throw new Error(statusData.error || 'Compression failed');
+                            
+                        } else if (attempts >= maxAttempts) {
+                            throw new Error('Processing timeout - file may be too large');
+                            
+                        } else {
+                            // Still processing
+                            const messages = [
+                                'Compressing large video file...',
+                                'This may take several minutes...',
+                                'Still working on it...',
+                                'Almost there...'
+                            ];
+                            document.getElementById('compressStatus').textContent = messages[Math.floor(attempts / 3) % messages.length];
+                            setTimeout(checkStatus, 5000); // Check again in 5 seconds
+                        }
+                        
+                    } catch (err) {
+                        throw err;
+                    }
+                };
+
+                // Start polling after 2 seconds
+                setTimeout(checkStatus, 2000);
+
+            } catch (err) {
+                progress.classList.add('hidden');
+                result.classList.remove('hidden');
+                result.innerHTML = `
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p class="text-red-800">❌ Error: ${err.message}</p>
+                    </div>
+                `;
+                btn.disabled = false;
+            }
+        });
+    </script>
 </body>
 </html>
