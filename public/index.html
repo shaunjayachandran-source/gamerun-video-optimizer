@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GameRun.ai Video Optimizer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
     <div class="container mx-auto px-4 py-8 max-w-6xl">
@@ -301,24 +301,33 @@
                 handleFile(e.target.files[0]);
             }
         });
+function handleFile(file) {
+    // More permissive file type check
+    const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
+    const isVideo = file.type.startsWith('video/') || validTypes.includes(file.type) || 
+                    file.name.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv)$/i);
+    
+    if (!isVideo) {
+        alert('Please select a valid video file (MP4, MOV, AVI, MKV, etc.)');
+        return;
+    }  // ← ADD THIS CLOSING BRACE
 
-        function handleFile(file) {
-            // More permissive file type check
-            const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm'];
-            const isVideo = file.type.startsWith('video/') || validTypes.includes(file.type) || 
-                            file.name.match(/\.(mp4|mov|avi|mkv|webm|flv|wmv)$/i);
-            
-            if (!isVideo) {
-                alert('Please select a valid video file (MP4, MOV, AVI, MKV, etc.)');
-                return;
-            }
+    // Check file size (5GB = 5 * 1024 * 1024 * 1024 bytes)
+    const maxSize = 5 * 1024 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert(`File too large! Maximum size is 5GB. Your file is ${(file.size / (1024**3)).toFixed(2)}GB`);
+        return;
+    }
 
-            // Check file size (5GB = 5 * 1024 * 1024 * 1024 bytes)
-            const maxSize = 5 * 1024 * 1024 * 1024;
-            if (file.size > maxSize) {
-                alert(`File too large! Maximum size is 5GB. Your file is ${(file.size / (1024**3)).toFixed(2)}GB`);
-                return;
-            }
+    selectedFile = file;
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+
+    document.getElementById('dropZoneContent').classList.add('hidden');
+    document.getElementById('fileInfo').classList.remove('hidden');
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = `${sizeMB} MB`;
+    compressBtn.disabled = false;
+}
 
             selectedFile = file;
             const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
