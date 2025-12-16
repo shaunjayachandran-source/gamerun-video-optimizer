@@ -343,6 +343,7 @@
                 document.getElementById('compressStatus').textContent = 'Uploading...';
                 
                 const uploadResponse = await fetch(`${API_URL}/api/compress`, {
+//                                 ^ parenthesis, not backtick
                     method: 'POST',
                     body: formData
                 });
