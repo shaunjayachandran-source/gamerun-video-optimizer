@@ -6,16 +6,9 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
-    server.close(() => {
-        console.log('HTTP server closed');
-    });
-});
-
 const express = require('express');
 const cors = require('cors');
+const { spawn } = require('child_process');
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs').promises;
@@ -31,6 +24,9 @@ app.use(express.static('public'));
 
 const TEMP_DIR = path.join(__dirname, 'temp');
 const OUTPUT_DIR = path.join(__dirname, 'output');
+
+const activeProcesses = new Map();
+const fileDeletionTimers = new Map();
 
 async function ensureDirectories() {
   await fs.mkdir(TEMP_DIR, { recursive: true });
@@ -48,7 +44,7 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage,
   limits: { 
-    fileSize: 5 * 1024 * 1024 * 1024, // 5GB
+    fileSize: 5 * 1024 * 1024 * 1024,
     files: 1
   }
 });
@@ -59,16 +55,11 @@ const presets = {
   minimal: { resolution: '720', fps: '24', crf: '32', preset: 'veryfast', maxSize: '500M' }
 };
 
-// Job storage for async compression
 const jobs = new Map();
 
-function convertYouTubeUrl(url) {
-  return url;
-}
-
-function execCommand(command, timeout = 600000) { // 10 minute timeout
+function execCommand(command, timeout = 600000) {
   return new Promise((resolve, reject) => {
-    const child = exec(command, { 
+    exec(command, { 
       maxBuffer: 1024 * 1024 * 10,
       timeout: timeout
     }, (error, stdout, stderr) => {
@@ -81,27 +72,108 @@ function execCommand(command, timeout = 600000) { // 10 minute timeout
   });
 }
 
-async function cleanupOldFiles() {
-  try {
-    const files = await fs.readdir(OUTPUT_DIR);
-    const now = Date.now();
-    for (const file of files) {
-      const filePath = path.join(OUTPUT_DIR, file);
-      const stats = await fs.stat(filePath);
-      const age = now - stats.mtimeMs;
-      if (age > 60 * 60 * 1000) { // 1 hour
-        await fs.unlink(filePath);
-        console.log(`Cleaned up old file: ${file}`);
+function spawnFFmpeg(inputFile, outputFile, config, jobId) {
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-i', inputFile,
+      '-vcodec', 'libx264',
+      '-crf', config.crf,
+      '-preset', config.preset,
+      '-vf', `scale=-2:${config.resolution}`,
+      '-r', config.fps,
+      '-fs', config.maxSize,
+      '-movflags', '+faststart',
+      '-progress', 'pipe:2',
+      '-y',
+      outputFile
+    ];
+
+    const ffmpeg = spawn('ffmpeg', args);
+    activeProcesses.set(jobId, ffmpeg);
+
+    let stderr = '';
+    let duration = 0;
+    let lastProgress = 0;
+
+    ffmpeg.stderr.on('data', (data) => {
+      const text = data.toString();
+      stderr += text;
+
+      if (duration === 0) {
+        const durationMatch = text.match(/Duration: (\d+):(\d+):(\d+\.\d+)/);
+        if (durationMatch) {
+          const hours = parseInt(durationMatch[1]);
+          const minutes = parseInt(durationMatch[2]);
+          const seconds = parseFloat(durationMatch[3]);
+          duration = hours * 3600 + minutes * 60 + seconds;
+        }
       }
+
+      const timeMatch = text.match(/time=(\d+):(\d+):(\d+\.\d+)/);
+      if (timeMatch && duration > 0) {
+        const hours = parseInt(timeMatch[1]);
+        const minutes = parseInt(timeMatch[2]);
+        const seconds = parseFloat(timeMatch[3]);
+        const currentTime = hours * 3600 + minutes * 60 + seconds;
+        const progress = Math.min(Math.round((currentTime / duration) * 100), 99);
+        
+        if (progress > lastProgress) {
+          lastProgress = progress;
+          const job = jobs.get(jobId);
+          if (job) {
+            jobs.set(jobId, { ...job, progress: progress });
+          }
+        }
+      }
+    });
+
+    ffmpeg.on('close', (code) => {
+      activeProcesses.delete(jobId);
+      if (code === 0) {
+        resolve({ success: true });
+      } else {
+        reject({ error: new Error(`FFmpeg exited with code ${code}`), stderr });
+      }
+    });
+
+    ffmpeg.on('error', (err) => {
+      activeProcesses.delete(jobId);
+      reject({ error: err, stderr });
+    });
+  });
+}
+
+function scheduleFileDeletion(filePath, delayMinutes, jobId = null) {
+  const delayMs = delayMinutes * 60 * 1000;
+  const timerId = setTimeout(async () => {
+    try {
+      await fs.unlink(filePath);
+      console.log(`🗑️ Auto-deleted: ${path.basename(filePath)}`);
+      fileDeletionTimers.delete(filePath);
+      if (jobId) jobs.delete(jobId);
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.error(`Delete failed:`, err.message);
     }
-  } catch (err) {
-    console.error('Cleanup error:', err);
+  }, delayMs);
+  fileDeletionTimers.set(filePath, timerId);
+  console.log(`⏰ Scheduled: ${path.basename(filePath)} in ${delayMinutes}min`);
+}
+
+function cancelFileDeletion(filePath) {
+  const timerId = fileDeletionTimers.get(filePath);
+  if (timerId) {
+    clearTimeout(timerId);
+    fileDeletionTimers.delete(filePath);
   }
 }
 
-// Health check endpoint
 app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.status(200).json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      activeJobs: jobs.size,
+      activeProcesses: activeProcesses.size
+    });
 });
 
 app.get('/api/health', async (req, res) => {
@@ -110,66 +182,14 @@ app.get('/api/health', async (req, res) => {
     await execCommand('ffmpeg -version', 5000);
     res.json({ status: 'ok', message: 'All dependencies installed' });
   } catch (err) {
-    res.status(500).json({ status: 'error', message: 'Missing dependencies', error: err.message });
+    res.status(500).json({ status: 'error', message: 'Missing dependencies' });
   }
 });
 
-// Root route
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.post('/api/download', async (req, res) => {
-  const { url, preset = 'balanced' } = req.body;
-  if (!url) {
-    return res.status(400).json({ error: 'URL is required' });
-  }
-  
-  const jobId = uuidv4();
-  const processedUrl = convertYouTubeUrl(url);
-  const config = presets[preset];
-  const outputFile = path.join(OUTPUT_DIR, `${jobId}.mp4`);
-  const tempFile = path.join(TEMP_DIR, `${jobId}_raw.mp4`);
-  
-  try {
-    console.log(`Starting download for job ${jobId}`);
-    
-    const downloadCmd = `yt-dlp --extractor-args "youtube:player_client=android" --user-agent "com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip" -f "bestvideo[height<=${config.resolution}][ext=mp4]+bestaudio[ext=m4a]/best" --merge-output-format mp4 -o "${tempFile}" "${processedUrl}"`;
-    await execCommand(downloadCmd);
-    
-    const stats = await fs.stat(tempFile);
-    const fileSizeMB = stats.size / (1024 * 1024);
-    const maxSizeMB = parseInt(config.maxSize);
-    
-    if (fileSizeMB > maxSizeMB) {
-      console.log(`Compressing ${jobId}: ${fileSizeMB}MB > ${maxSizeMB}MB`);
-      const compressCmd = `ffmpeg -i "${tempFile}" -vcodec libx264 -crf ${config.crf} -preset ${config.preset} -vf scale=-2:${config.resolution} -r ${config.fps} -fs ${config.maxSize} -movflags +faststart -y "${outputFile}"`;
-      await execCommand(compressCmd);
-      await fs.unlink(tempFile);
-    } else {
-      await fs.rename(tempFile, outputFile);
-    }
-    
-    console.log(`Download complete for job ${jobId}`);
-    res.json({ 
-      success: true, 
-      jobId, 
-      downloadUrl: `/api/download/${jobId}`, 
-      message: 'Video processed successfully' 
-    });
-  } catch (err) {
-    console.error('Download error:', err);
-    try {
-      await fs.unlink(tempFile);
-    } catch {}
-    res.status(500).json({ 
-      error: 'Failed to download or process video', 
-      details: err.stderr || err.message 
-    });
-  }
-});
-
-// Compress uploaded file endpoint - Returns job ID immediately
 app.post('/api/compress', upload.single('video'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
@@ -178,9 +198,8 @@ app.post('/api/compress', upload.single('video'), async (req, res) => {
   const { preset = 'balanced' } = req.body;
   const jobId = uuidv4();
   
-  console.log(`New compression job ${jobId}: ${req.file.originalname} (${(req.file.size / (1024*1024)).toFixed(2)}MB)`);
+  console.log(`New job ${jobId}: ${req.file.originalname} (${(req.file.size / (1024*1024)).toFixed(2)}MB)`);
   
-  // Store job info
   jobs.set(jobId, {
     status: 'processing',
     progress: 0,
@@ -188,7 +207,6 @@ app.post('/api/compress', upload.single('video'), async (req, res) => {
     preset: preset
   });
 
-  // Return job ID immediately
   res.json({ 
     success: true, 
     jobId,
@@ -196,40 +214,30 @@ app.post('/api/compress', upload.single('video'), async (req, res) => {
     message: 'Processing started'
   });
 
-  // Process in background (don't await)
   processCompressionJob(jobId, req.file.path, preset).catch(err => {
-    console.error(`Background job ${jobId} error:`, err);
+    console.error(`Job ${jobId} error:`, err);
   });
 });
 
-// Background compression processor
 async function processCompressionJob(jobId, inputFile, presetName) {
   const config = presets[presetName];
   const outputFile = path.join(OUTPUT_DIR, `${jobId}.mp4`);
 
   try {
-    console.log(`Processing job ${jobId} with preset ${presetName}`);
-    
-    // Update status to compressing
-    jobs.set(jobId, { ...jobs.get(jobId), status: 'compressing', progress: 25 });
+    console.log(`Processing ${jobId} with ${presetName}`);
+    jobs.set(jobId, { ...jobs.get(jobId), status: 'compressing', progress: 5 });
 
-    // Build ffmpeg command
-    const compressCmd = `ffmpeg -i "${inputFile}" -vcodec libx264 -crf ${config.crf} -preset ${config.preset} -vf scale=-2:${config.resolution} -r ${config.fps} -fs ${config.maxSize} -movflags +faststart -y "${outputFile}"`;
-    
-    // Run compression
-    await execCommand(compressCmd);
+    await spawnFFmpeg(inputFile, outputFile, config, jobId);
 
-    // Get file sizes for stats
     const inputStats = await fs.stat(inputFile);
     const outputStats = await fs.stat(outputFile);
     const reduction = Math.round((1 - outputStats.size / inputStats.size) * 100);
 
-    console.log(`Job ${jobId} complete: ${(inputStats.size / (1024*1024)).toFixed(2)}MB → ${(outputStats.size / (1024*1024)).toFixed(2)}MB (${reduction}% reduction)`);
+    console.log(`Job ${jobId} complete: ${(inputStats.size / (1024*1024)).toFixed(2)}MB → ${(outputStats.size / (1024*1024)).toFixed(2)}MB (${reduction}%)`);
 
-    // Cleanup input file
     await fs.unlink(inputFile);
+    scheduleFileDeletion(outputFile, 20, jobId);
 
-    // Mark job as complete
     jobs.set(jobId, {
       status: 'complete',
       progress: 100,
@@ -240,67 +248,48 @@ async function processCompressionJob(jobId, inputFile, presetName) {
         reduction: reduction
       }
     });
-
   } catch (err) {
-    console.error(`Compression error for job ${jobId}:`, err);
-    
-    // Cleanup input file on error
-    try {
-      await fs.unlink(inputFile);
-    } catch {}
-    
-    // Mark job as failed
+    console.error(`Compression error ${jobId}:`, err);
+    try { await fs.unlink(inputFile); } catch {}
     jobs.set(jobId, {
       status: 'error',
       progress: 0,
-      error: 'Failed to compress video',
-      details: err.stderr || err.message
+      error: 'Failed to compress video'
     });
   }
 }
 
-// Job status endpoint
 app.get('/api/status/:jobId', (req, res) => {
-  const { jobId } = req.params;
-  const job = jobs.get(jobId);
-  
-  if (!job) {
-    return res.status(404).json({ error: 'Job not found' });
-  }
-  
+  const job = jobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
   res.json(job);
 });
 
-// Download endpoint
 app.get('/api/download/:jobId', async (req, res) => {
-  const { jobId } = req.params;
-  const filePath = path.join(OUTPUT_DIR, `${jobId}.mp4`);
-  
+  const filePath = path.join(OUTPUT_DIR, `${req.params.jobId}.mp4`);
   try {
     await fs.access(filePath);
-    res.download(filePath, 'gamerun_optimized.mp4', async (err) => {
-      if (err) {
-        console.error('Download error:', err);
-      }
+    cancelFileDeletion(filePath);
+    res.download(filePath, 'gamerun_optimized.mp4', (err) => {
+      if (!err) scheduleFileDeletion(filePath, 5, req.params.jobId);
     });
   } catch (err) {
     res.status(404).json({ error: 'File not found' });
   }
 });
 
-// Start server
-let server;
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received');
+  server.close(() => console.log('Server closed'));
+});
 
+let server;
 ensureDirectories().then(() => {
   server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✓ Server running on port ${PORT}`);
-    console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`✓ Ready to accept requests`);
-    
-    // Start cleanup interval
-    setInterval(cleanupOldFiles, 30 * 60 * 1000); // Every 30 minutes
+    console.log(`✓ Server on port ${PORT}`);
+    console.log(`✓ Max upload: 5GB, 90-min videos supported`);
   });
 }).catch(err => {
-  console.error('Failed to start server:', err);
+  console.error('Failed to start:', err);
   process.exit(1);
 });
